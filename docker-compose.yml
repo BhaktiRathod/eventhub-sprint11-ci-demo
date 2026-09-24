@@ -1,0 +1,41 @@
+services:
+
+  # PostgreSQL Database
+  event-db:
+    image: postgres:16
+
+    environment:
+      POSTGRES_DB: event_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root123
+
+    volumes:
+      - event-db-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d event_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # Event Service
+  event-service:
+    image: event-service:1.0
+
+    ports:
+      - "8081:8081"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://event-db:5432/event_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: root123
+
+    depends_on:
+      event-db:
+        condition: service_healthy
+
+
+# Persistent database storage
+volumes:
+  event-db-data:
