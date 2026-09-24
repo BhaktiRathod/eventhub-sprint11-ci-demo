@@ -8,6 +8,7 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Define the tasks that GitHub Actions should run
 jobs:
   build-and-test:
 
