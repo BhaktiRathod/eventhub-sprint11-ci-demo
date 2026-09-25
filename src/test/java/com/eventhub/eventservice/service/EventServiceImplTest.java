@@ -58,7 +58,7 @@ class EventServiceImplTest {
                 eventService.createEvent(request);
 
         assertEquals(
-                "Docker Workshop",
+                "Spring Boot Workshop",
                 result.getName()
         );
 

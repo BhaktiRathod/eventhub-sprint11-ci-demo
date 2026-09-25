@@ -2,35 +2,22 @@
 
 This demo uses the existing **Event Service** to implement a simple Continuous Integration (CI) workflow using **GitHub Actions**.
 
-The workflow automatically builds the Event Service and runs its unit tests whenever code is pushed to the `main` branch.
+The demo is divided into two parts:
+
+- **Part 1:** Create and verify a successful CI workflow.
+- **Part 2:** Introduce a failing test, inspect the CI failure, fix the test, and verify the workflow succeeds again.
 
 ---
 
-## Problem statement 
+## Problem statement
 
-Create a GitHub Actions CI workflow for the existing Event Service.
+### Part 1 — Successful CI Workflow
 
-Configure the workflow to run automatically when code is pushed to the main branch.
+Create a GitHub Actions workflow for the existing Event Service. Configure it to run on a push to `main`, set up Java 25, execute the Maven unit tests, and verify that the workflow completes successfully with all tests passing.
 
-Set up Java 25 and run the Maven build and unit tests.
+### Part 2 — Diagnose a Failed CI Workflow
 
-Verify that all tests pass and the GitHub Actions workflow completes successfully.
-
----
-
-## Demo Flow
-
-```text
-Developer pushes code to GitHub
-        ↓
-GitHub Actions starts
-        ↓
-Java 25 is set up
-        ↓
-Maven build and tests run
-        ↓
-Pass / Fail result is shown
-```
+Deliberately change one expected value in a unit test and push the change. Verify that the workflow fails, inspect the GitHub Actions logs to identify the failed test and expected/actual values, correct the test, and push again to verify that the workflow returns to green.
 
 ---
 
@@ -42,6 +29,17 @@ Event Service
  PostgreSQL
 ```
 
+The project contains:
+
+- Spring Boot Event Service
+- PostgreSQL configuration
+- Dockerfile
+- Docker Compose file
+- Service-layer unit tests
+
+> PostgreSQL is part of the application setup, but it is not required for the unit tests in this demo because the repository is mocked using Mockito.
+
+---
 
 ## Test Scope
 
@@ -54,6 +52,19 @@ EventServiceImpl   ← Unit tests
       ↓
 EventRepository    ← Mocked using Mockito
 ```
+
+Tests used:
+
+| Test | Purpose |
+|---|---|
+| `shouldCreateEvent()` | Verifies event creation. |
+| `shouldReturnEventById()` | Verifies that an existing event can be retrieved. |
+| `shouldReturnAllEvents()` | Verifies that all events are returned. |
+| `shouldThrowExceptionWhenEventNotFound()` | Verifies behaviour when an event does not exist. |
+
+---
+
+# Part 1 — Successful CI Workflow
 
 ## 1. Verify the Tests Locally
 
@@ -88,19 +99,17 @@ Do not add another README, `.gitignore`, or licence if these files already exist
 
 ---
 
-## 3. Configure Git Authentication for HTTPS
+## 3. Create a Fine-Grained Personal Access Token
 
 GitHub does not accept the normal GitHub account password for Git operations over HTTPS.
 
 Use a **Personal Access Token (PAT)** as the password.
 
-### Create a Fine-Grained Personal Access Token
-
-1. Click **Profile picture → Settings**.
-2. Click **Developer settings**.
-3. Click **Personal access tokens → Fine-grained tokens**.
+1. Open **Profile picture → Settings**.
+2. Open **Developer settings**.
+3. Open **Personal access tokens → Fine-grained tokens**.
 4. Create a new token.
-5. Select the repository created for this demo -**eventhub-sprint11-ci-demo**
+5. Select the repository created for this demo.
 
 ### Configure Repository Permissions
 
@@ -122,9 +131,13 @@ Final permissions should be:
 Contents   → Read and write
 Workflows  → Read and write
 Metadata   → Read-only
-> The token is shown only for authentication. Do not add it to source code, `application.properties`, `ci.yml`, or commit it to Git.
-Copy the token and save it in a secure location. You will not be able to see it again.
-### Use the Token with Git
+```
+
+> The token is used only for authentication. Do not add it to source code, `application.properties`, `ci.yml`, or commit it to Git.
+
+---
+
+## 4. Use the Token with Git
 
 When Git asks:
 
@@ -144,7 +157,7 @@ paste the **Personal Access Token**, not your GitHub account password.
 
 ---
 
-## 4. Push the Existing Event Service to GitHub
+## 5. Push the Existing Event Service to GitHub
 
 From the project root:
 
@@ -162,7 +175,7 @@ Verify that the Event Service source code is visible in the GitHub repository.
 
 ---
 
-## 5. Create the GitHub Actions Workflow
+## 6. Create the GitHub Actions Workflow
 
 At the project root, create:
 
@@ -190,7 +203,7 @@ event-service/
 
 ---
 
-## 6. Add the CI Workflow
+## 7. Add the CI Workflow
 
 Add the following to `.github/workflows/ci.yml`:
 
@@ -230,15 +243,15 @@ jobs:
         run: mvn clean test
 ```
 
-### Important Parts of the Workflow
+### Important Points
 
-- `on` starts the workflow automatically when code is pushed to `main`.
-- `runs-on: ubuntu-latest` provides a GitHub-hosted machine on which the CI job runs.
+- The workflow runs automatically when code is pushed to `main`.
+- GitHub uses a hosted runner and sets up Java 25.
 - `mvn clean test` builds the project and runs all unit tests.
 
 ---
 
-## 7. Commit and Push the Workflow
+## 8. Commit and Push the Workflow
 
 Run:
 
@@ -252,11 +265,11 @@ The push to `main` should automatically trigger the workflow.
 
 ---
 
-## 8. Verify the GitHub Actions Run
+## 9. Verify the Successful GitHub Actions Run
 
-### Verify the GitHub Actions Run
+In the GitHub repository:
 
-1. Open the **Actions** tab in the GitHub repository.
+1. Open the **Actions** tab.
 2. Click the workflow run that was created after the push.
 3. On the workflow run page, click the **`build-and-test`** job.
 4. Verify that the following steps completed successfully:
@@ -267,7 +280,186 @@ Set up Java 25         ✓
 Build and run tests    ✓
 ```
 
+5. Click **Build and run tests** to view the Maven output.
+6. Confirm that all tests passed and the build completed successfully.
+
+Expected result:
+
+```text
+Tests run: 4, Failures: 0, Errors: 0
+BUILD SUCCESS
+```
+
 A green workflow confirms that the Event Service was built and tested successfully by GitHub Actions.
+
+---
+
+## Part 1 Expected Flow
+
+```text
+Code pushed to main
+        ↓
+GitHub Actions starts
+        ↓
+Checkout code
+        ↓
+Set up Java 25
+        ↓
+Maven build and tests run
+        ↓
+All tests pass
+        ↓
+Workflow turns green
+```
+
+---
+
+# Part 2 — Diagnose a Failed CI Workflow
+
+## 10. Introduce a Failing Test
+
+To understand how CI detects problems, deliberately change one expected value in `EventServiceImplTest`.
+
+Change:
+
+```java
+assertEquals(
+        "Spring Boot Workshop",
+        result.getName()
+);
+```
+
+to:
+
+```java
+assertEquals(
+        "Docker Workshop",
+        result.getName()
+);
+```
+
+The actual value returned by the service is still:
+
+```text
+Spring Boot Workshop
+```
+
+---
+
+## 11. Commit and Push the Failing Test
+
+Run:
+
+```bash
+git add .
+git commit -m "Introduce failing test for CI verification"
+git push
+```
+
+Because the workflow is configured to run on every push to `main`, GitHub Actions starts automatically.
+
+---
+
+## 12. Verify the Failed Workflow
+
+In GitHub:
+
+1. Open the **Actions** tab.
+2. Click the latest workflow run.
+3. Click the **`build-and-test`** job.
+4. Click **Build and run tests**.
+
+The workflow should now fail.
+
+You should see an assertion failure similar to:
+
+```text
+expected: <Docker Workshop>
+but was: <Spring Boot Workshop>
+```
+
+The logs help identify:
+
+- Which test failed
+- Expected value
+- Actual value
+- Error details
+
+A red workflow indicates that one or more CI checks failed.
+
+---
+
+## 13. Fix the Test
+
+Correct the assertion back to:
+
+```java
+assertEquals(
+        "Spring Boot Workshop",
+        result.getName()
+);
+```
+
+---
+
+## 14. Commit and Push the Fix
+
+Run:
+
+```bash
+git add .
+git commit -m "Fix failing unit test"
+git push
+```
+
+GitHub Actions starts automatically again.
+
+---
+
+## 15. Verify the Workflow Returns to Green
+
+In the GitHub repository:
+
+1. Open the **Actions** tab.
+2. Click the latest workflow run.
+3. Click the **`build-and-test`** job.
+4. Verify:
+
+```text
+Checkout code          ✓
+Set up Java 25         ✓
+Build and run tests    ✓
+```
+
+5. Open **Build and run tests** and confirm that all tests passed.
+
+The workflow should now turn green again.
+
+---
+
+## Part 2 Expected Flow
+
+```text
+Working test
+     ↓
+Change expected value
+     ↓
+Push code
+     ↓
+GitHub Actions runs
+     ↓
+Test fails
+     ↓
+Workflow turns red
+     ↓
+Inspect logs
+     ↓
+Fix the test
+     ↓
+Push again
+     ↓
+Workflow turns green
+```
 
 ---
 
@@ -280,14 +472,16 @@ The demo is complete when:
 - A push to `main` triggers GitHub Actions automatically.
 - Java 25 is configured on the runner.
 - Maven executes the unit tests.
-- All four tests pass.
-- The workflow is shown as successful in the GitHub **Actions** tab.
+- All tests pass in Part 1.
+- A deliberately incorrect assertion causes the workflow to fail in Part 2.
+- The GitHub Actions logs are used to identify the failure.
+- The corrected test causes the workflow to return to green.
 
 ---
 
 ## Troubleshooting
 
-### Push is rejected when adding `ci.yml`
+### Push Is Rejected When Adding `ci.yml`
 
 You may see an error similar to:
 
@@ -298,7 +492,7 @@ refusing to allow a Personal Access Token to create or update workflow
 
 This means the token does not have permission to modify GitHub Actions workflow files.
 
-For a **fine-grained PAT**, verify:
+For a fine-grained PAT, verify:
 
 ```text
 Contents   → Read and write
@@ -306,17 +500,17 @@ Workflows  → Read and write
 Metadata   → Read-only
 ```
 
-Update the token permissions and run again:
+Update the token permissions and run:
 
 ```bash
 git push
 ```
 
-You do not need to create another commit if the commit was already created successfully.
+> You do not need to create another commit if the commit was already created successfully.
 
 ---
 
-### Git asks for a password
+### Git Asks for a Password
 
 Do not enter the normal GitHub account password.
 
@@ -329,9 +523,11 @@ Password → Personal Access Token
 
 ---
 
-### Git still uses an old token
+### Git Still Uses an Old Token
 
-If Git continues using a previous token, remove the saved `github.com` credential from the credential manager configured on the machine, then run:
+If Git continues using a previous token, remove the saved `github.com` credential from the credential manager configured on the machine.
+
+Then run:
 
 ```bash
 git push
@@ -341,7 +537,7 @@ Enter the GitHub username and the updated Personal Access Token when prompted.
 
 ---
 
-### Workflow does not start
+### Workflow Does Not Start
 
 Check:
 
@@ -358,19 +554,19 @@ on:
 
 ---
 
-### Workflow fails during Maven tests
+### Workflow Fails During Maven Tests
 
 Open:
 
 ```text
 GitHub Repository
 → Actions
-→ Event Service CI
+→ Latest workflow run
 → build-and-test
 → Build and run tests
 ```
 
-Read the Maven output to identify the failed test or build error.
+Read the Maven output to identify the failed test and the expected/actual values.
 
 ---
 
@@ -383,20 +579,7 @@ GitHub Actions
    ↓
 Build + Tests
    ↓
-Pass / Fail
+Green / Red Result
 ```
 
-GitHub Actions allows the same build and test checks to run automatically whenever code is pushed.
-
----
-
-## Official References
-
-- GitHub Actions – Building and testing Java with Maven:
-  https://docs.github.com/en/actions/tutorials/build-and-test-code/java-with-maven
-
-- GitHub Actions – `setup-java`:
-  https://github.com/actions/setup-java
-
-- GitHub – Personal Access Tokens:
-  https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+GitHub Actions automatically runs the same build and test checks whenever code is pushed and provides immediate feedback when a test fails.
